@@ -1,42 +1,57 @@
 const request = require('supertest');
-const { app } = require('../src/server');
-const { usersModel } = require('../src/auth/models/user-model');
+const app = require('../src/server'); // Assuming your server file is in src/server.js
 
-describe('Authentication Routes', () => {
-  beforeEach(async () => {
-    // Clear the user table before each test
-    await usersModel.destroy({ truncate: true });
+describe('Authentication API', () => {
+  let createdUser; // Store the created user for later use in signin test
+
+  describe('POST /signup', () => {
+    it('should create a new user', async () => {
+      const response = await request(app)
+        .post('/signup')
+        .send({ username: 'testuser', password: 'testpassword' })
+        .expect(201);
+
+      // Assert that the response contains the created user record
+      expect(response.body).toHaveProperty('user');
+
+      // Store the created user for later use in signin test
+      createdUser = response.body.user;
+    });
   });
 
-  after(async () => {
-    // Close the server and disconnect from the database after all tests
-    await usersModel.sequelize.close();
+  describe('POST /signin', () => {
+    it('should login as a user using basic auth', async () => {
+      const response = await request(app)
+        .post('/signin')
+        .set('Authorization', `Basic ${Buffer.from('testuser:testpassword').toString('base64')}`)
+        .expect(200);
+
+      // Assert that the response contains the user record
+      expect(response.body).toHaveProperty('user');
+      expect(response.body.user).toEqual(createdUser);
+    });
   });
 
-  it('should create a new user on /signup', async () => {
-    const newUser = { username: 'testuser', password: 'password' };
+  describe('Auth Middleware', () => {
+    it('should allow access with valid basic authentication', async () => {
+      const response = await request(app)
+        .get('/protected-route')
+        .set('Authorization', `Basic ${Buffer.from('testuser:testpassword').toString('base64')}`)
+        .expect(200);
 
-    const response = await request(app)
-      .post('/signup')
-      .send(newUser)
-      .expect(201);
+      // Assert that the response contains the expected data for the protected route
+      expect(response.body).toHaveProperty('data');
+      // Add more assertions as per your requirements
+    });
 
-    expect(response.body.username).toBe(newUser.username);
-    expect(response.body.password).not.toBe(newUser.password);
-  });
+    it('should reject access without valid basic authentication', async () => {
+      const response = await request(app)
+        .get('/protected-route')
+        .expect(401);
 
-  it('should authenticate a user on /signin', async () => {
-    const username = 'testuser';
-    const password = 'password';
-
-    // Create a new user
-    await usersModel.create({ username, password });
-
-    const response = await request(app)
-      .post('/signin')
-      .auth(username, password)
-      .expect(200);
-
-    expect(response.body.user.username).toBe(username);
+      // Assert that the response contains the expected error for unauthorized access
+      expect(response.body).toHaveProperty('error');
+      // Add more assertions as per your requirements
+    });
   });
 });

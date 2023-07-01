@@ -3,7 +3,7 @@
 module.exports = (req, res) => {
   res.status(404).json({
     code: 404,
-    message: 'Page not Found!',
+    message: 'Route not found',
     route: req.originalUrl
   })
 }
